@@ -7,7 +7,7 @@ from uuid import uuid4
 from app.dao.base import BaseDAO
 from db.models import User, Room
 from app.schemas.user import User as UserSchema, AddUser as AddUserSchema
-from app.schemas.room import Room as RoomSchema
+from app.schemas.room import Room as RoomSchema, AddRoom as AddRoomSchema
 
 class UserDAO(BaseDAO[User]):
     @classmethod
@@ -33,8 +33,18 @@ class UserDAO(BaseDAO[User]):
 
 class RoomDAO(BaseDAO[Room]):
     @classmethod
-    async def add_room(cls, session: AsyncSession, room_data: RoomSchema) -> Room:
-        return await cls.add(session, room_data)
+    async def add_room(cls, session: AsyncSession, room_data: AddRoomSchema) -> Room:
+        room_dict: dict = room_data.model_dump()
+        room_dict['id'] = str(uuid4())
+        room_dict['users'] = []
+        room: Room = cls.model(**room_dict)
+        session.add(room)
+        try:
+            await session.flush()
+            return room
+        except SQLAlchemyError:
+            await session.rollback()
+            raise
 
     async def get_room_by_id(cls, session: AsyncSession, room_id: str) -> Room:
         return await cls.find_one_or_none(session, create_model(

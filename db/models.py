@@ -16,6 +16,6 @@ class User(Base):  # обязательно наследуем все модел
 class Room(Base):
     __tablename__ = "rooms"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=False)
     creator_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     users: Mapped[list[str]] = mapped_column(ARRAY(String))

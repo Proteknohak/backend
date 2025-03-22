@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request, Response, Depends
 from app.schemas.user import User, AddUser
-from app.schemas.room import Room
+from app.schemas.room import Room, AddRoom
 from app.services.manager import Manager
 
 router = APIRouter()
@@ -26,9 +26,7 @@ async def create_user(request: Request, manager: Manager = Depends()) -> User:
         lang=lang,
     ))
     if is_creator:
-        manager.add_room(Room(
-            id=room_id,
-            creator_id=user.id,
-            users=[]
+        await manager.add_room(AddRoom(
+            creator_id=user.id
         ))
     return user

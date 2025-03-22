@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dao.dao import RoomDAO
 from app.dao.session_maker import connection
-from app.schemas.room import Room as RoomSchema
+from app.schemas.room import Room as RoomSchema, AddRoom as AddRoomSchema
 from app.schemas.user import User as UserSchema
 from db.models import User, Room
 
@@ -11,9 +11,9 @@ class RoomService:
         self.roomdao = RoomDAO()
 
     @connection()
-    async def add_room(self, room_data: RoomSchema, *args, session: AsyncSession) -> RoomSchema:
+    async def add_room(self, room_data: AddRoomSchema, *args, session: AsyncSession) -> RoomSchema:
         room: Room = await self.roomdao.add_room(session, room_data)
-        return RoomSchema(room)
+        return RoomSchema(**room.__dict__)
 
     @connection(commit=False)
     async def get_room_by_id(self, room_id: str, *args, session: AsyncSession) -> RoomSchema:
