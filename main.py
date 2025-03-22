@@ -27,65 +27,71 @@ app.add_middleware(
 
 OUTPUT_DIR='outputs'
 
-def convert_webm_blob_to_wav(webm_blob: bytes, wav_path: str = None) -> str:
+webm_headers = None
+
+def extract_webm_headers(webm_blob: bytes, max_header_size: int = 200) -> bytes:
     """
-    Конвертирует WebM blob в WAV-файл.
-    
-    Аргументы:
-        webm_blob (bytes): Бинарные данные WebM с аудио.
-        wav_path (str, optional): Путь для сохранения WAV-файла. Если None, создаётся временный файл.
-    
-    Возвращает:
-        str: Путь к созданному WAV-файлу.
-    
-    Исключения:
-        ValueError: Если blob пустой.
-        Exception: Ошибки конвертации.
+    Извлекает заголовки из первого WebM blob (примерно до начала аудиоданных).
+    Возвращает байты заголовков.
     """
+    cluster_start = webm_blob.find(b'\x1F\x43\xB6\x75')
+    if cluster_start == -1:
+        return webm_blob[:max_header_size]
+    return webm_blob[:cluster_start]
+
+def convert_webm_blob_to_wav(webm_blob: bytes, wav_path: str = None, is_first_chunk: bool = False) -> str:
+    """
+    Конвертирует WebM blob в WAV-файл с использованием заголовков, если нужно.
+    """
+    global webm_headers
+
     if not webm_blob:
         raise ValueError("WebM blob пустой, нет данных для конвертации")
 
-    try:
-        # Если путь не указан, создаём временный файл
-        if wav_path is None:
-            temp_wav = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-            wav_path = temp_wav.name
-            should_delete = True
-        else:
-            should_delete = False
+    if wav_path is None:
+        temp_wav = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        wav_path = temp_wav.name
+        should_delete = True
+    else:
+        should_delete = False
 
-        # Конвертация WebM в WAV
-        audio = AudioSegment.from_file(io.BytesIO(webm_blob), format="webm")
+    # Инициализируем переменные вне try, чтобы они были доступны в except
+    temp_webm_path = None
+
+    try:
+        # Если это первый чанк, сохраняем заголовки
+        if is_first_chunk:
+            webm_headers = extract_webm_headers(webm_blob)
+            fixed_blob = webm_blob
+        else:
+            if webm_headers is None:
+                raise ValueError("Заголовки WebM не инициализированы, первый чанк не обработан")
+            fixed_blob = webm_headers + webm_blob
+
+        # Сохраняем "исправленный" WebM во временный файл
+        temp_webm = tempfile.NamedTemporaryFile(suffix=".webm", delete=False)
+        temp_webm_path = temp_webm.name
+        with open(temp_webm_path, "wb") as f:
+            f.write(fixed_blob)
+        print(f"Сохранён WebM-чанк: {temp_webm_path}")
+
+        # Конвертируем в WAV
+        audio = AudioSegment.from_file(temp_webm_path, format="webm")
         audio.export(wav_path, format="wav")
         print(f"Конвертировано в WAV: {wav_path}")
 
+        # Удаляем временный WebM-файл
+        if os.path.exists(temp_webm_path):
+            os.remove(temp_webm_path)
+
         return wav_path
-
     except Exception as e:
-        # Удаляем временный файл при ошибке, если он был создан
-        if 'wav_path' in locals() and os.path.exists(wav_path) and should_delete:
+        # Очистка только существующих файлов
+        if os.path.exists(wav_path) and should_delete:
             os.remove(wav_path)
+        if temp_webm_path and os.path.exists(temp_webm_path):
+            os.remove(temp_webm_path)
         raise Exception(f"Ошибка конвертации WebM в WAV: {e}")
-
-def convert_blob_to_wav(blob: bytes, output_path: str, sample_rate: int = 44100, sample_width: int = 2, channels: int = 1) -> None:
-    if not blob:
-        raise ValueError("Blob пустой, нет данных для конвертации")
-    
-    if sample_rate <= 0 or sample_width <= 0 or channels <= 0:
-        raise ValueError("Некорректные параметры: sample_rate, sample_width и channels должны быть положительными")
-
-    try:
-        with wave.open(output_path, 'wb') as wav_file:
-            # Устанавливаем параметры WAV-файла
-            wav_file.setnchannels(channels)        # Количество каналов
-            wav_file.setsampwidth(sample_width)    # Ширина сэмпла (в байтах)
-            wav_file.setframerate(sample_rate)     # Частота дискретизации
-            wav_file.writeframes(blob)             # Записываем сырые данные
-        
-        print(f"WAV-файл успешно создан: {output_path}")
-    
-    except Exception as e:
-        raise IOError(f"Ошибка при записи WAV-файла: {str(e)}")
 
 def translate_wav_russian_to_english(wav_path: str) -> str:
     """
@@ -131,9 +137,12 @@ def translate_wav_russian_to_english(wav_path: str) -> str:
     except Exception as e:
         raise Exception(f"Ошибка обработки WAV-файла: {e}")
 
+is_first_chunk = True
+
 @app.websocket("/")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    global is_first_chunk
     output_file = os.path.join(OUTPUT_DIR, f"translation.txt")
     while True:
         try:
@@ -143,8 +152,9 @@ async def websocket_endpoint(websocket: WebSocket):
             elif 'bytes' in chunk:
                 print('blob got')
                 tmp_path = './wavs/'+datetime.now().ctime()+'.wav'
-                convert_webm_blob_to_wav(chunk['bytes'], tmp_path)
+                convert_webm_blob_to_wav(chunk['bytes'], tmp_path, is_first_chunk)
                 translation = translate_wav_russian_to_english(tmp_path)
+                is_first_chunk = False
                 await websocket.send_text(translation)
 
             await websocket.send_json({
