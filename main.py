@@ -12,6 +12,7 @@ import asyncio
 import tempfile
 import wave
 from datetime import datetime
+from pydub import AudioSegment
 
 app = FastAPI()
 
@@ -25,6 +26,46 @@ app.add_middleware(
 )
 
 OUTPUT_DIR='outputs'
+
+def convert_webm_blob_to_wav(webm_blob: bytes, wav_path: str = None) -> str:
+    """
+    Конвертирует WebM blob в WAV-файл.
+    
+    Аргументы:
+        webm_blob (bytes): Бинарные данные WebM с аудио.
+        wav_path (str, optional): Путь для сохранения WAV-файла. Если None, создаётся временный файл.
+    
+    Возвращает:
+        str: Путь к созданному WAV-файлу.
+    
+    Исключения:
+        ValueError: Если blob пустой.
+        Exception: Ошибки конвертации.
+    """
+    if not webm_blob:
+        raise ValueError("WebM blob пустой, нет данных для конвертации")
+
+    try:
+        # Если путь не указан, создаём временный файл
+        if wav_path is None:
+            temp_wav = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+            wav_path = temp_wav.name
+            should_delete = True
+        else:
+            should_delete = False
+
+        # Конвертация WebM в WAV
+        audio = AudioSegment.from_file(io.BytesIO(webm_blob), format="webm")
+        audio.export(wav_path, format="wav")
+        print(f"Конвертировано в WAV: {wav_path}")
+
+        return wav_path
+
+    except Exception as e:
+        # Удаляем временный файл при ошибке, если он был создан
+        if 'wav_path' in locals() and os.path.exists(wav_path) and should_delete:
+            os.remove(wav_path)
+        raise Exception(f"Ошибка конвертации WebM в WAV: {e}")
 
 def convert_blob_to_wav(blob: bytes, output_path: str, sample_rate: int = 44100, sample_width: int = 2, channels: int = 1) -> None:
     if not blob:
@@ -102,7 +143,7 @@ async def websocket_endpoint(websocket: WebSocket):
             elif 'bytes' in chunk:
                 print('blob got')
                 tmp_path = './wavs/'+datetime.now().ctime()+'.wav'
-                convert_blob_to_wav(chunk['bytes'], tmp_path)
+                convert_webm_blob_to_wav(chunk['bytes'], tmp_path)
                 translation = translate_wav_russian_to_english(tmp_path)
                 await websocket.send_text(translation)
 
@@ -118,4 +159,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run('main:app', host="192.168.105.135", port=8000, reload=True)
+    uvicorn.run('main:app', host="192.168.200.135", port=8000, reload=True)
