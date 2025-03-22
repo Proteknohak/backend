@@ -18,7 +18,7 @@ async def create_user(request: Request, manager: Manager = Depends()) -> User:
     user: User = await manager.add_user(AddUser(**data))
     return user
 
-@router.put(
+@router.patch(
     '/user/{user_id}'
 )
 async def change_lang(user_id: str, request: Request, manager: Manager = Depends()) -> User:
