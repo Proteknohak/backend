@@ -4,7 +4,6 @@ class User(BaseModel):
     id: str
     name: str
     lang: str
-    is_creator: bool
 
     model_config = ConfigDict(from_attributes=True)
 

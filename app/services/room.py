@@ -18,7 +18,7 @@ class RoomService:
     @connection(commit=False)
     async def get_room_by_id(self, room_id: str, *args, session: AsyncSession) -> RoomSchema:
         room: Room = await self.roomdao.get_room_by_id(session, room_id)
-        return RoomSchema(room)
+        return RoomSchema(**room.__dict__)
     
     @connection(commit=False)
     async def get_room_users(self, room_id: str, *args, session: AsyncSession) -> list[str]:
@@ -27,5 +27,10 @@ class RoomService:
     
     @connection()
     async def add_user_to_room(self, room_id: str, user_id: str, *args, session: AsyncSession) -> RoomSchema:
-        room: Room = self.roomdao.add_user_to_room(session, user_id, room_id)
-        return await RoomSchema(room)
+        room: Room = await self.roomdao.add_user_to_room(session, user_id, room_id)
+        return RoomSchema(**room.__dict__)
+
+    @connection()
+    async def remove_user_from_room(self, room_id: str, user_id: str, *args, session: AsyncSession) -> RoomSchema:
+        room: Room = await self.roomdao.remove_user_from_room(session, user_id, room_id)
+        return RoomSchema(**room.__dict__)

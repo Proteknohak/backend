@@ -1,30 +1,33 @@
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Request, Response, Depends
 from app.schemas.user import User
+from app.schemas.room import Room, AddRoom
 
-from app.schemas.room import Room
+from app.services.manager import Manager
 
 router = APIRouter()
 
 @router.post(
     '/room'
 )
-async def create_room(request: Request) -> User:
+async def create_room(request: Request, manager: Manager = Depends()) -> Room:
     '''
     body:
     id: str,
     creator_id: str
     '''
-    user_data = await request.json()
-    user: User = User(**user_data, is_creator=False)
-
-    return user
+    data = await request.json()
+    room: Room = await manager.add_room(AddRoom(**data))
+    return room
 
 
 @router.get(
-    '/room/{id}'
+    '/room/{room_id}'
 )
-async def join_room(id: str) -> Room:
-    '''
-    return room_id, creator_id, users
-    '''
-    pass
+async def join_room(room_id: str, user_id: str, manager: Manager = Depends()) -> Room:
+    return await manager.add_user_to_room(room_id, user_id)
+
+@router.delete(
+    '/room/{room_id}'
+)
+async def leave_room(room_id: str, user_id: str, manager: Manager = Depends()) -> Room:
+    return await manager.remove_user_from_room(room_id, user_id)

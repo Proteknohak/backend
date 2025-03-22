@@ -14,5 +14,12 @@ class Manager:
     
     async def add_room(self, room_data: AddRoom) -> Room:
         return await self.room_service.add_room(room_data)
-
     
+    async def add_user_to_room(self, room_id: str, user_id: str) -> Room:
+        return await self.room_service.add_user_to_room(room_id, user_id)
+
+    async def remove_user_from_room(self, room_id: str, user_id: str) -> Room:
+        return await self.room_service.remove_user_from_room(room_id, user_id)
+    
+    async def change_user_lang(self, user_id: str, lang: str) -> User:
+        return await self.user_service.change_user_lang(user_id, lang)
