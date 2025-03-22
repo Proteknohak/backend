@@ -20,52 +20,94 @@ app.add_middleware(
 OUTPUT_DIR='outputs'
 
 webm_headers = None
+organizer_ws = None
 is_first_chunk = True
+
+wsockets: list[tuple[WebSocket, str]] = []
 
 @app.websocket("/")
 async def websocket_endpoint(websocket: WebSocket):
+    global organizer_ws, webm_headers, wsockets
     await websocket.accept()
-    lang = await websocket.receive_text()
-    global is_first_chunk
-    while True:
-        try:
+    lang = await websocket.receive_text()  # Получаем язык перевода
+    is_creator = int(await websocket.receive_text())  # 1 для организатора, 0 для участника
+
+    if is_creator:
+        if organizer_ws is not None:
+            await websocket.send_json({"error": "Организатор уже подключён"})
+            await websocket.close()
+            return
+        organizer_ws = websocket
+        is_first_chunk = True  # Локальный флаг для организатора
+        print("Организатор подключён")
+    else:
+        wsockets.append((websocket, lang))
+        print(f"Участник подключён, язык: {lang}")
+
+    try:
+        while True:
             chunk = await websocket.receive()
             if 'text' in chunk:
-                print(chunk['text'])
-            elif 'bytes' in chunk:
-                print('blob got')
-                tmp_path = './wavs/'+datetime.now().ctime()+'.wav'
+                print(f"Получен текст: {chunk['text']}")
+            elif 'bytes' in chunk and is_creator:  # Только организатор отправляет аудио
+                print("blob got")
+                tmp_path = f'./wavs/{datetime.now().ctime()}.wav'
+                
+                # Конвертируем WebM в WAV
                 convert_webm_blob_to_wav(chunk['bytes'], tmp_path, is_first_chunk)
-                translation = translate_wav_russian_to_english(tmp_path, lang)
+                
+                # Рассылаем перевод всем участникам
+                for wsocket, participant_lang in wsockets[:]:  # Копируем список для безопасного перебора
+                    try:
+                        translation = translate_wav_russian_to_english(tmp_path, participant_lang)
+                        tts = gTTS(text=translation, lang=participant_lang)
+                        
+                        mp3_buffer = io.BytesIO()
+                        tts.write_to_fp(mp3_buffer)
+                        mp3_buffer.seek(0)
+                        
+                        audio = AudioSegment.from_mp3(mp3_buffer)
+                        wav_buffer = io.BytesIO()
+                        audio.export(wav_buffer, format="wav")
+                        wav_buffer.seek(0)
+
+                        wav_bytes = wav_buffer.getvalue()
+                        await wsocket.send_bytes(wav_bytes)
+                        
+                        mp3_buffer.close()
+                        wav_buffer.close()
+                    except Exception as e:
+                        print(f"Ошибка отправки участнику: {e}")
+                        if wsocket in [ws[0] for ws in wsockets]:
+                            wsockets.remove((wsocket, participant_lang))
+
+                # Очищаем временный файл и обновляем флаг
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
                 is_first_chunk = False
-                tts = gTTS(text=translation, lang=lang)
-        
-                mp3_buffer = io.BytesIO()
-                tts.write_to_fp(mp3_buffer)
-                mp3_buffer.seek(0)
-                
-                audio = AudioSegment.from_mp3(mp3_buffer)
-                wav_buffer = io.BytesIO()
-                audio.export(wav_buffer, format="wav")
-                wav_buffer.seek(0)
 
-                wav_bytes = wav_buffer.getvalue()                
-                
-                await websocket.send_bytes(wav_bytes)
-                
-                mp3_buffer.close()
-                wav_buffer.close()
-
-        except WebSocketDisconnect:
-            await websocket.close()
-        except Exception as e:
-            print(str(e))
-            if 'Cannot call "receive" once a disconnect message has been received.' == str(e):
-                raise e
-            #await websocket.send_json({"error": str(e)})
-            #await websocket.close()
+    except WebSocketDisconnect:
+        if is_creator:
+            organizer_ws = None
+            webm_headers = None  # Сбрасываем заголовки при отключении организатора
+            # Закрываем всех участников
+            for wsocket, _ in wsockets[:]:
+                try:
+                    await wsocket.close()
+                except:
+                    pass
+            wsockets.clear()
+            print("Организатор отключён, комната очищена")
+        else:
+            if (websocket, lang) in wsockets:
+                wsockets.remove((websocket, lang))
+            print(f"Участник отключён, язык: {lang}")
+        await websocket.close()
+    except Exception as e:
+        print(f"Ошибка: {e}")
+        if 'Cannot call "receive" once a disconnect message has been received.' == str(e):
+            raise e
+        await websocket.send_json({"error": str(e)})
 
 app.include_router(room_router)
 app.include_router(user_router)
