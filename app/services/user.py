@@ -24,3 +24,8 @@ class UserService:
     async def change_user_lang(self, user_id: str, lang: str, *args, session: AsyncSession) -> UserSchema:
         user: User = await self.userdao.change_user_lang(session, user_id, lang)
         return UserSchema(**user.__dict__)
+    
+    @connection(commit=False)
+    async def get_all_users(self, *args, session: AsyncSession) -> list[UserSchema]:
+        users: list[User] = await self.userdao.get_all_users(session)
+        return [UserSchema(**user.__dict__) for user in users]

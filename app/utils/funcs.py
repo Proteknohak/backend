@@ -11,6 +11,14 @@ import wave
 from datetime import datetime
 from pydub import AudioSegment
 
+OUTPUT_DIR='outputs'
+
+SAVE_DIR = "audio_files"
+if not os.path.exists(SAVE_DIR):
+    os.makedirs(SAVE_DIR)
+
+webm_headers = None
+
 def extract_webm_headers(webm_blob: bytes, max_header_size: int = 200) -> bytes:
     """
     Извлекает заголовки из первого WebM blob (примерно до начала аудиоданных).
@@ -75,7 +83,7 @@ def convert_webm_blob_to_wav(webm_blob: bytes, wav_path: str = None, is_first_ch
             os.remove(temp_webm_path)
         raise Exception(f"Ошибка конвертации WebM в WAV: {e}")
 
-def translate_wav_russian_to_english(wav_path: str) -> str:
+def translate_wav_russian_to_english(wav_path: str, lang='en') -> str:
     """
     Переводит речь из WAV-файла с русского на английский язык.
     
@@ -95,7 +103,7 @@ def translate_wav_russian_to_english(wav_path: str) -> str:
 
     # Инициализация распознавателя и переводчика
     recognizer = sr.Recognizer()
-    translator = GoogleTranslator(source='ru', target='en')
+    translator = GoogleTranslator(source='ru', target=lang)
 
     try:
         # Чтение WAV-файла
@@ -118,3 +126,6 @@ def translate_wav_russian_to_english(wav_path: str) -> str:
         raise Exception(f"Ошибка сервиса распознавания: {e}")
     except Exception as e:
         raise Exception(f"Ошибка обработки WAV-файла: {e}")
+
+is_first_chunk = True
+

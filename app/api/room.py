@@ -23,7 +23,9 @@ async def create_room(request: Request, manager: Manager = Depends()) -> Room:
 @router.get(
     '/room/{room_id}'
 )
-async def join_room(room_id: str, user_id: str, manager: Manager = Depends()) -> Room:
+async def join_room(room_id: str, user_id: str | None = None, manager: Manager = Depends()) -> Room:
+    if user_id is None:
+        return await manager.get_room_info(room_id)
     return await manager.add_user_to_room(room_id, user_id)
 
 @router.delete(

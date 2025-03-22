@@ -20,15 +20,13 @@ app.add_middleware(
 OUTPUT_DIR='outputs'
 
 webm_headers = None
-
-
 is_first_chunk = True
 
 @app.websocket("/")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    lang = await websocket.receive_text()
     global is_first_chunk
-    output_file = os.path.join(OUTPUT_DIR, f"translation.txt")
     while True:
         try:
             chunk = await websocket.receive()
@@ -38,24 +36,40 @@ async def websocket_endpoint(websocket: WebSocket):
                 print('blob got')
                 tmp_path = './wavs/'+datetime.now().ctime()+'.wav'
                 convert_webm_blob_to_wav(chunk['bytes'], tmp_path, is_first_chunk)
-                translation = translate_wav_russian_to_english(tmp_path)
+                translation = translate_wav_russian_to_english(tmp_path, lang)
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
                 is_first_chunk = False
-                await websocket.send_text(translation)
+                tts = gTTS(text=translation, lang=lang)
+        
+                mp3_buffer = io.BytesIO()
+                tts.write_to_fp(mp3_buffer)
+                mp3_buffer.seek(0)
+                
+                audio = AudioSegment.from_mp3(mp3_buffer)
+                wav_buffer = io.BytesIO()
+                audio.export(wav_buffer, format="wav")
+                wav_buffer.seek(0)
 
-            await websocket.send_json({
-                "message": "Message got"
-            })
+                wav_bytes = wav_buffer.getvalue()                
+                
+                await websocket.send_bytes(wav_bytes)
+                
+                mp3_buffer.close()
+                wav_buffer.close()
+
         except WebSocketDisconnect:
             await websocket.close()
         except Exception as e:
             print(str(e))
-            await websocket.send_json({"error": str(e)})
+            if 'Cannot call "receive" once a disconnect message has been received.' == str(e):
+                raise e
+            #await websocket.send_json({"error": str(e)})
             #await websocket.close()
-
 
 app.include_router(room_router)
 app.include_router(user_router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run('main:app', host="172.20.10.4", port=8000, reload=True)
+    uvicorn.run('main:app', host="0.0.0.0", port=8000, reload=True)

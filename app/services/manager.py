@@ -23,3 +23,9 @@ class Manager:
     
     async def change_user_lang(self, user_id: str, lang: str) -> User:
         return await self.user_service.change_user_lang(user_id, lang)
+    
+    async def get_room_info(self, room_id: str) -> Room:
+        return await self.room_service.get_room_by_id(room_id)
+    
+    async def get_all_users(self) -> list[Room]:
+        return await self.user_service.get_all_users()

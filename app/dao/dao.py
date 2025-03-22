@@ -27,7 +27,7 @@ class UserDAO(BaseDAO[User]):
     async def get_user_by_id(cls, session: AsyncSession, user_id: str) -> User | None:
         return await cls.find_one_or_none(session, create_model(
             'UserIdModel', user_id=(str, ...)
-        )(user_id=user_id))
+        )(id=user_id))
     
     @classmethod
     async def change_user_lang(cls, session: AsyncSession, user_id: str, lang: str) -> User:
@@ -41,6 +41,12 @@ class UserDAO(BaseDAO[User]):
         except SQLAlchemyError as e:
             raise
 
+    @classmethod
+    async def get_all_users(cls, session: AsyncSession) -> list[User]:
+        try:
+            return (await session.execute(select(User))).scalars().all()
+        except SQLAlchemyError as e:
+            raise
     
 
     
@@ -62,8 +68,8 @@ class RoomDAO(BaseDAO[Room]):
     @classmethod
     async def get_room_by_id(cls, session: AsyncSession, room_id: str) -> Room:
         return await cls.find_one_or_none(session, create_model(
-            'RoomIdModel', room_id=(str, ...)
-        )(room_id=room_id))
+            'RoomIdModel', id=(str, ...)
+        )(id=room_id))
 
     @classmethod
     async def get_room_users(cls, session: AsyncSession, room_id: str) -> list[str]:

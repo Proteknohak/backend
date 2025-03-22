@@ -26,3 +26,9 @@ async def change_lang(user_id: str, request: Request, manager: Manager = Depends
     lang: str = data.get('lang')
     user: User = await manager.change_user_lang(user_id, lang)
     return user
+
+@router.get(
+    '/user'
+)
+async def get_all_users(manager: Manager = Depends()) -> list[User]:
+    return await manager.get_all_users()
