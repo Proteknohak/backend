@@ -47,9 +47,7 @@ class UserDAO(BaseDAO[User]):
             return (await session.execute(select(User))).scalars().all()
         except SQLAlchemyError as e:
             raise
-    
 
-    
 
 class RoomDAO(BaseDAO[Room]):
     @classmethod

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, Response, Depends
 from app.schemas.user import User
 from app.schemas.room import Room, AddRoom
-
+from pydantic import ValidationError
 from app.services.manager import Manager
 
 router = APIRouter()
@@ -15,9 +15,13 @@ async def create_room(request: Request, manager: Manager = Depends()) -> Room:
     id: str,
     creator_id: str
     '''
-    data = await request.json()
-    room: Room = await manager.add_room(AddRoom(**data))
-    return room
+    try:
+        data = await request.json()
+        room: Room = await manager.add_room(AddRoom(**data))
+        return room
+    except ValidationError:
+        print('Error')
+        print(data)
 
 
 @router.get(
