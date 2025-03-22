@@ -129,3 +129,37 @@ def translate_wav_russian_to_english(wav_path: str, lang='en') -> str:
 
 is_first_chunk = True
 
+def translate_english_to_target(text: str, target_lang: str = "ru") -> str:
+    """
+    Переводит текст с английского на указанный язык.
+
+    Аргументы:
+        text (str): Текст на английском языке для перевода.
+        target_lang (str): Код целевого языка (например, "ru" для русского, "fr" для французского). По умолчанию "ru".
+
+    Возвращает:
+        str: Переведённый текст.
+
+    Исключения:
+        ValueError: Если текст пустой или язык не поддерживается.
+        Exception: Общие ошибки перевода (например, проблемы с подключением).
+    """
+    if not text or not text.strip():
+        raise ValueError("Текст для перевода пустой")
+
+    # Проверяем, поддерживается ли целевой язык
+    supported_langs = GoogleTranslator().get_supported_languages()
+    if target_lang not in supported_langs:
+        raise ValueError(f"Целевой язык '{target_lang}' не поддерживается. Доступные языки: {supported_langs}")
+
+    try:
+        translator = GoogleTranslator(source='en', target=target_lang)
+        translated_text = translator.translate(text)
+        if not translated_text:
+            raise ValueError("Перевод не удалось выполнить, результат пустой")
+        
+        print(f"Оригинальный текст (английский): {text}")
+        print(f"Переведённый текст ({target_lang}): {translated_text}")
+        return translated_text
+    except Exception as e:
+        raise Exception(f"Ошибка перевода с английского на {target_lang}: {str(e)}")

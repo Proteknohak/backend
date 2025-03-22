@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.room import router as room_router
 from app.api.user import router as user_router
+import threading
 
 from app.utils.funcs import *
 
@@ -24,6 +25,40 @@ organizer_ws = None
 is_first_chunk = True
 
 wsockets: list[tuple[WebSocket, str]] = []
+
+
+async def process_participant(wsocket: WebSocket, en_text: str, participant_lang: str):
+    """Обрабатывает перевод и отправку аудио для одного участника."""
+    try:
+        translation = translate_english_to_target(en_text, participant_lang)
+        tts = gTTS(text=translation, lang=participant_lang)
+        
+        mp3_buffer = io.BytesIO()
+        tts.write_to_fp(mp3_buffer)
+        mp3_buffer.seek(0)
+        
+        audio = AudioSegment.from_mp3(mp3_buffer)
+        wav_buffer = io.BytesIO()
+        audio.export(wav_buffer, format="wav")
+        wav_buffer.seek(0)
+
+        wav_bytes = wav_buffer.getvalue()
+        await wsocket.send_bytes(wav_bytes)
+        
+        mp3_buffer.close()
+        wav_buffer.close()
+    except Exception as e:
+        print(f"Ошибка обработки участника (язык: {participant_lang}): {e}")
+        if wsocket in [ws[0] for ws in wsockets]:
+            wsockets.remove((wsocket, participant_lang))
+
+def participant_thread(wsocket: WebSocket, en_text: str, participant_lang: str):
+    """Запускает асинхронную задачу в потоке."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(process_participant(wsocket, en_text, participant_lang))
+    loop.close()
+
 
 @app.websocket("/")
 async def websocket_endpoint(websocket: WebSocket):
@@ -55,31 +90,20 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                 # Конвертируем WebM в WAV
                 convert_webm_blob_to_wav(chunk['bytes'], tmp_path, is_first_chunk)
+                en_text = translate_wav_russian_to_english(tmp_path)
                 
-                # Рассылаем перевод всем участникам
-                for wsocket, participant_lang in wsockets[:]:  # Копируем список для безопасного перебора
-                    try:
-                        translation = translate_wav_russian_to_english(tmp_path, participant_lang)
-                        tts = gTTS(text=translation, lang=participant_lang)
-                        
-                        mp3_buffer = io.BytesIO()
-                        tts.write_to_fp(mp3_buffer)
-                        mp3_buffer.seek(0)
-                        
-                        audio = AudioSegment.from_mp3(mp3_buffer)
-                        wav_buffer = io.BytesIO()
-                        audio.export(wav_buffer, format="wav")
-                        wav_buffer.seek(0)
+                threads = []
+                for wsocket, participant_lang in wsockets[:]:
+                    thread = threading.Thread(
+                        target=participant_thread,
+                        args=(wsocket, en_text, participant_lang)
+                    )
+                    threads.append(thread)
+                    thread.start()
 
-                        wav_bytes = wav_buffer.getvalue()
-                        await wsocket.send_bytes(wav_bytes)
-                        
-                        mp3_buffer.close()
-                        wav_buffer.close()
-                    except Exception as e:
-                        print(f"Ошибка отправки участнику: {e}")
-                        if wsocket in [ws[0] for ws in wsockets]:
-                            wsockets.remove((wsocket, participant_lang))
+                # Ждём завершения всех потоков (опционально)
+                for thread in threads:
+                    thread.join()
 
                 # Очищаем временный файл и обновляем флаг
                 if os.path.exists(tmp_path):
