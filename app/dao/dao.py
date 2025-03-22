@@ -35,7 +35,6 @@ class RoomDAO(BaseDAO[Room]):
     @classmethod
     async def add_room(cls, session: AsyncSession, room_data: AddRoomSchema) -> Room:
         room_dict: dict = room_data.model_dump()
-        room_dict['id'] = str(uuid4())
         room_dict['users'] = []
         room: Room = cls.model(**room_dict)
         session.add(room)

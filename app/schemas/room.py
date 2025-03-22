@@ -8,6 +8,7 @@ class Room(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class AddRoom(BaseModel):
+    id: str
     creator_id: str
 
     model_config = ConfigDict(from_attributes=True)
