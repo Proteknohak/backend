@@ -10,6 +10,7 @@ import tempfile
 import wave
 from datetime import datetime
 from pydub import AudioSegment
+from enum import Enum
 
 OUTPUT_DIR='outputs'
 
@@ -145,15 +146,21 @@ def translate_english_to_target(text: str, target_lang: str = "ru") -> str:
         Exception: Общие ошибки перевода (например, проблемы с подключением).
     """
     if not text or not text.strip():
-        raise ValueError("Текст для перевода пустой")
+        return ''
 
     # Проверяем, поддерживается ли целевой язык
+    d: dict = {
+        "en": "english",
+        "ha": "hausa",
+        "fr": "french",
+        "ur": "urdu"
+    }
     supported_langs = GoogleTranslator().get_supported_languages()
-    if target_lang not in supported_langs:
+    if d[target_lang] not in supported_langs:
         raise ValueError(f"Целевой язык '{target_lang}' не поддерживается. Доступные языки: {supported_langs}")
 
     try:
-        translator = GoogleTranslator(source='en', target=target_lang)
+        translator = GoogleTranslator(source='english', target=d[target_lang])
         translated_text = translator.translate(text)
         if not translated_text:
             raise ValueError("Перевод не удалось выполнить, результат пустой")

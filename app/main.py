@@ -44,7 +44,7 @@ async def process_participant(wsocket: WebSocket, en_text: str, participant_lang
 
         wav_bytes = wav_buffer.getvalue()
         await wsocket.send_bytes(wav_bytes)
-        
+    
         mp3_buffer.close()
         wav_buffer.close()
     except Exception as e:
@@ -90,7 +90,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                 # Конвертируем WebM в WAV
                 convert_webm_blob_to_wav(chunk['bytes'], tmp_path, is_first_chunk)
-                en_text = translate_wav_russian_to_english(tmp_path)
+                try:
+                    en_text = translate_wav_russian_to_english(tmp_path)
+                except Exception:
+                    en_text = ''
                 
                 threads = []
                 for wsocket, participant_lang in wsockets[:]:
@@ -129,7 +132,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close()
     except Exception as e:
         print(f"Ошибка: {e}")
-        if 'Cannot call "receive" once a disconnect message has been received.' == str(e):
+        if 'Не удалось распознать речь в WAV-файле' == str(e):
             raise e
         await websocket.send_json({"error": str(e)})
 
