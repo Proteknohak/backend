@@ -1,6 +1,3 @@
-from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse, FileResponse
-from fastapi.middleware.cors import CORSMiddleware
 import speech_recognition as sr
 from deep_translator import GoogleTranslator
 from gtts import gTTS
@@ -13,21 +10,6 @@ import tempfile
 import wave
 from datetime import datetime
 from pydub import AudioSegment
-
-app = FastAPI()
-
-# Настройка CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-OUTPUT_DIR='outputs'
-
-webm_headers = None
 
 def extract_webm_headers(webm_blob: bytes, max_header_size: int = 200) -> bytes:
     """
@@ -136,37 +118,3 @@ def translate_wav_russian_to_english(wav_path: str) -> str:
         raise Exception(f"Ошибка сервиса распознавания: {e}")
     except Exception as e:
         raise Exception(f"Ошибка обработки WAV-файла: {e}")
-
-is_first_chunk = True
-
-@app.websocket("/")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    global is_first_chunk
-    output_file = os.path.join(OUTPUT_DIR, f"translation.txt")
-    while True:
-        try:
-            chunk = await websocket.receive()
-            if 'text' in chunk:
-                print(chunk['text'])
-            elif 'bytes' in chunk:
-                print('blob got')
-                tmp_path = './wavs/'+datetime.now().ctime()+'.wav'
-                convert_webm_blob_to_wav(chunk['bytes'], tmp_path, is_first_chunk)
-                translation = translate_wav_russian_to_english(tmp_path)
-                is_first_chunk = False
-                await websocket.send_text(translation)
-
-            await websocket.send_json({
-                "message": "Message got"
-            })
-        except WebSocketDisconnect:
-            await websocket.close()
-        except Exception as e:
-            print(str(e))
-            await websocket.send_json({"error": str(e)})
-            #await websocket.close()
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run('main:app', host="192.168.200.135", port=8000, reload=True)
