@@ -64,7 +64,6 @@ def participant_thread(wsocket: WebSocket, en_text: str, participant_lang: str):
 async def websocket_endpoint(websocket: WebSocket):
     global organizer_ws, webm_headers, wsockets
     await websocket.accept()
-    lang = await websocket.receive_text()  # Получаем язык перевода
     is_creator = int(await websocket.receive_text())  # 1 для организатора, 0 для участника
 
     if is_creator:
@@ -76,6 +75,7 @@ async def websocket_endpoint(websocket: WebSocket):
         is_first_chunk = True  # Локальный флаг для организатора
         print("Организатор подключён")
     else:
+        lang = await websocket.receive_text()  # Получаем язык перевода
         wsockets.append((websocket, lang))
         print(f"Участник подключён, язык: {lang}")
 
